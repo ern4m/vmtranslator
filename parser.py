@@ -4,7 +4,7 @@ from command import (
     Arithmetic,
     Label,
     Goto,
-    IFGoto,
+    IfGoto,
     Push,
     Pop,
     Function,

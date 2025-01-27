@@ -11,7 +11,7 @@ from command import (
     Pop,
     Label,
     Goto,
-    IFGoto,
+    IfGoto,
     Return,
     CallFunction,
     Function,

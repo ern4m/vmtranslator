@@ -203,8 +203,8 @@ class CodeWriter:
         self.write("A=M")
         self.write("0;JMP")
 
-def set_file_name(self, path_name):
-        self.module_name = os.path.splitext(os.path.basename(path_name))[0]
+    def set_file_name(self, path_name):
+            self.module_name = os.path.splitext(os.path.basename(path_name))[0]
 
     def write_push(self, seg, index):
         if seg == "constant":
