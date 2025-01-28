@@ -56,7 +56,7 @@ def main():
 
     if is_directory(path):
         code_writer = CodeWriter(f"{filename_without_extension(path)}/{Path(path).name}.asm")
-        code_writer.write_init()
+        # code_writer.write_init()
         for file in Path(path).iterdir():
             if file.suffix == ".vm":
                 abs_path = file.resolve()
@@ -67,7 +67,7 @@ def main():
         abs_path = Path(path).resolve()
         print(f"Translating: {abs_path}")
         code_writer = CodeWriter(f"{filename_without_extension(path)}.asm")
-        code_writer.write_init()
+        #code_writer.write_init()
         translate(abs_path, code_writer)
         code_writer.close_file()
 
