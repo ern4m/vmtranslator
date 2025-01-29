@@ -1,152 +1,218 @@
-import os
-
-def check(e):
-    if e is not None:
-        raise e
-
-def filename_without_extension(fn):
-    return os.path.splitext(fn)[0]
-
 class CodeWriter:
-    def __init__(self, path_name):
-        self.out = open(path_name, 'w')
+    def __init__(self, file_name):
+        self.writer = open(file_name, "w")
         self.module_name = ""
-        self.func_name = ""
-        self.label_count = 0
-        self.call_count = 0
-        self.return_sub_count = 0
+        self.syn_count = 0
 
-    def write(self, s):
-        self.out.write(f"{s}\n")
+    def set_file_name(self, file_name):
+        self.module_name = file_name.split("/")[-1].split(".")[0]
 
-    def segment_pointer(self, segment, index):
+    def register_name(self, segment, index):
         if segment == "local":
             return "LCL"
         elif segment == "argument":
             return "ARG"
-        elif segment in ["this", "that"]:
-            return segment.upper()
-        elif segment == "temp":
-            return f"R{5 + index}"
+        elif segment == "this":
+            return "THIS"
+        elif segment == "that":
+            return "THAT"
         elif segment == "pointer":
             return f"R{3 + index}"
-        elif segment == "static":
-            return f"{self.module_name}.{index}"
+        elif segment == "temp":
+            return f"R{5 + index}"
         else:
-            return "ERROR"
+            return f"{self.module_name}.{index}"
 
-    def set_file_name(self, path_name):
-            self.module_name = os.path.splitext(os.path.basename(path_name))[0]
+    def write_push(self, segment, index):
+        if segment == "constant":
+            self._write(f"@{index} // push {segment} {index}")
+            self._write("D=A")
+            self._write("@SP")
+            self._write("A=M")
+            self._write("M=D")
+            self._write("@SP")
+            self._write("M=M+1")
+        elif segment in ["static", "temp", "pointer"]:
+            self._write(f"@{self.register_name(segment, index)} // push {segment} {index}")
+            self._write("D=M")
+            self._write("@SP")
+            self._write("A=M")
+            self._write("M=D")
+            self._write("@SP")
+            self._write("M=M+1")
+        else:
+            self._write(f"@{self.register_name(segment, 0)} // push {segment} {index}")
+            self._write("D=M")
+            self._write(f"@{index}")
+            self._write("A=D+A")
+            self._write("D=M")
+            self._write("@SP")
+            self._write("A=M")
+            self._write("M=D")
+            self._write("@SP")
+            self._write("M=M+1")
 
-    def write_push(self, seg, index):
-        if seg == "constant":
-            self.write(f"@{index} // push {seg} {index}")
-            self.write("D=A")
-            self.write("@SP")
-            self.write("A=M")
-            self.write("M=D")
-            self.write("@SP")
-            self.write("M=M+1")
-        elif seg in ["static", "temp", "pointer"]:
-            self.write(f"@{self.segment_pointer(seg, index)} // push {seg} {index}")
-            self.write("D=M")
-            self.write("@SP")
-            self.write("A=M")
-            self.write("M=D")
-            self.write("@SP")
-            self.write("M=M+1")
-        elif seg in ["local", "argument", "this", "that"]:
-            self.write(f"@{self.segment_pointer(seg, index)} // push {seg} {index}")
-            self.write("D=M")
-            self.write(f"@{index}")
-            self.write("A=D+A")
-            self.write("D=M")
-            self.write("@SP")
-            self.write("A=M")
-            self.write("M=D")
-            self.write("@SP")
-            self.write("M=M+1")
+    def write_pop(self, segment, index):
+        if segment in ["static", "temp", "pointer"]:
+            self._write("@SP // pop {segment} {index}")
+            self._write("M=M-1")
+            self._write("A=M")
+            self._write("D=M")
+            self._write(f"@{self.register_name(segment, index)}")
+            self._write("M=D")
+        else:
+            self._write(f"@{self.register_name(segment, 0)} // pop {segment} {index}")
+            self._write("D=M")
+            self._write(f"@{index}")
+            self._write("D=D+A")
+            self._write("@R13")
+            self._write("M=D")
+            self._write("@SP")
+            self._write("M=M-1")
+            self._write("A=M")
+            self._write("D=M")
+            self._write("@R13")
+            self._write("A=M")
+            self._write("M=D")
 
-    def write_pop(self, seg, index):
-        if seg in ["static", "temp", "pointer"]:
-            self.write(f"@SP // pop {seg} {index}")
-            self.write("M=M-1")
-            self.write("A=M")
-            self.write("D=M")
-            self.write(f"@{self.segment_pointer(seg, index)}")
-            self.write("M=D")
-        elif seg in ["local", "argument", "this", "that"]:
-            self.write(f"@{self.segment_pointer(seg, index)} // pop {seg} {index}")
-            self.write("D=M")
-            self.write(f"@{index}")
-            self.write("D=D+A")
-            self.write("@R13")
-            self.write("M=D")
-            self.write("@SP")
-            self.write("M=M-1")
-            self.write("A=M")
-            self.write("D=M")
-            self.write("@R13")
-            self.write("A=M")
-            self.write("M=D")
+    def write_arithmetic(self, command):
+        if command == "add":
+            self._write_arithmetic_add()
+        elif command == "sub":
+            self._write_arithmetic_sub()
+        elif command == "neg":
+            self._write_arithmetic_neg()
+        elif command == "eq":
+            self._write_arithmetic_eq()
+        elif command == "gt":
+            self._write_arithmetic_gt()
+        elif command == "lt":
+            self._write_arithmetic_lt()
+        elif command == "and":
+            self._write_arithmetic_and()
+        elif command == "or":
+            self._write_arithmetic_or()
+        else:
+            self._write_arithmetic_not()
 
-    def write_arithmetic(self, cmd_name):
-        if cmd_name == "add":
-            self.write_arithmetic_add()
-        elif cmd_name == "sub":
-            self.write_arithmetic_sub()
-        elif cmd_name == "neg":
-            self.write_arithmetic_neg()
-        elif cmd_name == "eq":
-            self.write_arithmetic_eq()
-        elif cmd_name == "gt":
-            self.write_arithmetic_gt()
-        elif cmd_name == "lt":
-            self.write_arithmetic_lt()
-        elif cmd_name == "and":
-            self.write_arithmetic_and()
-        elif cmd_name == "or":
-            self.write_arithmetic_or()
-        elif cmd_name == "not":
-            self.write_arithmetic_not()
+    def _write_arithmetic_add(self):
+        self._write("@SP // add")
+        self._write("M=M-1")
+        self._write("A=M")
+        self._write("D=M")
+        self._write("A=A-1")
+        self._write("M=D+M")
 
-    def write_binary_arithmetic(self):
-        self.write("@SP")
-        self.write("AM=M-1")
-        self.write("D=M")
-        self.write("A=A-1")
+    def _write_arithmetic_sub(self):
+        self._write("@SP // sub")
+        self._write("M=M-1")
+        self._write("A=M")
+        self._write("D=M")
+        self._write("A=A-1")
+        self._write("M=M-D")
 
-    def write_arithmetic_add(self):
-        self.write_binary_arithmetic()
-        self.write("M=D+M")
+    def _write_arithmetic_neg(self):
+        self._write("@SP // neg")
+        self._write("A=M")
+        self._write("A=A-1")
+        self._write("M=-M")
 
-    def write_arithmetic_sub(self):
-        self.write_binary_arithmetic()
-        self.write("M=M-D")
+    def _write_arithmetic_and(self):
+        self._write("@SP // and")
+        self._write("AM=M-1")
+        self._write("D=M")
+        self._write("A=A-1")
+        self._write("M=D&M")
 
-    def write_arithmetic_and(self):
-        self.write_binary_arithmetic()
-        self.write("M=D&M")
+    def _write_arithmetic_or(self):
+        self._write("@SP // or")
+        self._write("AM=M-1")
+        self._write("D=M")
+        self._write("A=A-1")
+        self._write("M=D|M")
 
-    def write_arithmetic_or(self):
-        self.write_binary_arithmetic()
-        self.write("M=D|M")
+    def _write_arithmetic_not(self):
+        self._write("@SP // not")
+        self._write("A=M")
+        self._write("A=A-1")
+        self._write("M=!M")
 
-    def write_unary_arithmetic(self):
-        self.write("@SP")
-        self.write("A=M")
-        self.write("A=A-1")
+    def _write_arithmetic_eq(self):
+        label = f"JEQ_{self.module_name}_{self.syn_count}"
+        self.syn_count += 1
+        self._write("@SP // eq")
+        self._write("AM=M-1")
+        self._write("D=M")
+        self._write("@SP")
+        self._write("AM=M-1")
+        self._write("D=M-D")
+        self._write(f"@{label}")
+        self._write("D;JEQ")
+        self._write("D=1")
+        self._write(f"({label})")
+        self._write("D=D-1")
+        self._write("@SP")
+        self._write("A=M")
+        self._write("M=D")
+        self._write("@SP")
+        self._write("M=M+1")
 
-    def write_arithmetic_neg(self):
-        self.write_unary_arithmetic()
-        self.write("M=-M")
+    def _write_arithmetic_gt(self):
+        label_true = f"JGT_TRUE_{self.module_name}_{self.syn_count}"
+        label_false = f"JGT_FALSE_{self.module_name}_{self.syn_count}"
+        self.syn_count += 1
+        self._write("@SP // gt")
+        self._write("AM=M-1")
+        self._write("D=M")
+        self._write("@SP")
+        self._write("AM=M-1")
+        self._write("D=M-D")
+        self._write(f"@{label_true}")
+        self._write("D;JGT")
+        self._write("D=0")
+        self._write(f"@{label_false}")
+        self._write("0;JMP")
+        self._write(f"({label_true})")
+        self._write("D=-1")
+        self._write(f"({label_false})")
+        self._write("@SP")
+        self._write("A=M")
+        self._write("M=D")
+        self._write("@SP")
+        self._write("M=M+1")
 
-    def write_arithmetic_not(self):
-        self.write_unary_arithmetic()
-        self.write("M=!M")
+    def _write_arithmetic_lt(self):
+        label_true = f"JLT_TRUE_{self.module_name}_{self.syn_count}"
+        label_false = f"JLT_FALSE_{self.module_name}_{self.syn_count}"
+        self.syn_count += 1
+        self._write("@SP // lt")
+        self._write("AM=M-1")
+        self._write("D=M")
+        self._write("@SP")
+        self._write("AM=M-1")
+        self._write("D=M-D")
+        self._write(f"@{label_true}")
+        self._write("D;JLT")
+        self._write("D=0")
+        self._write(f"@{label_false}")
+        self._write("0;JMP")
+        self._write(f"({label_true})")
+        self._write("D=-1")
+        self._write(f"({label_false})")
+        self._write("@SP")
+        self._write("A=M")
+        self._write("M=D")
+        self._write("@SP")
+        self._write("M=M+1")
 
-    def set_file_name(self, path_name):
-        self.module_name = os.path.splitext(os.path.basename(path_name))[0]
+    def close(self):
+        self.writer.close()
 
-    def close_file(self):
-        self.out.close()
+    def _write(self, s):
+        self.writer.write(s + "\n")
+        
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()

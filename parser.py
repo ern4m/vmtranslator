@@ -1,66 +1,63 @@
-import re
-from command import (
-    Return,
-    Arithmetic,
-    Label,
-    Goto,
-    IfGoto,
-    Push,
-    Pop,
-    Function,
-    CallFunction,
-    UndefinedCommand,
-)
-
 class Parser:
-    def __init__(self, fname):
-        self.tokens = []
-        self.position = 0
-        self.curr_token = ""
-        self._tokenize_file(fname)
-
-    def _tokenize_file(self, fname):
-        with open(fname, 'r') as file:
-            code = file.read()
-        code_proc = re.sub(r'//.*', '', code)
-        self.tokens = re.findall(r'[a-zA-Z][_a-zA-Z0-9./-]*|0|[1-9][0-9]*', code_proc)
+    def __init__(self, file_name):
+        self.reader = open(file_name, "r")
+        self.current_command = None
 
     def has_more_commands(self):
-        return self.position < len(self.tokens)
+        # Check if there are more lines to read
+        current_position = self.reader.tell()
+        has_more = bool(self.reader.readline())
+        self.reader.seek(current_position)  # Reset the file pointer
+        return has_more
 
     def advance(self):
-        self.curr_token = self.tokens[self.position]
-        self.position += 1
+        if self.has_more_commands():
+            self.current_command = self.reader.readline().strip()
+            # Skip empty lines and comments
+            while self.current_command and (self.current_command == "" or self.current_command.startswith("//")):
+                self.current_command = self.reader.readline().strip()
+        else:
+            self.current_command = None
 
-    def next_command(self):
-        self.advance()
-        if self.curr_token == "return":
-            return Return()
-        elif self.curr_token in {"add", "sub", "neg", "eq", "gt", "lt", "and", "or", "not"}:
-            return Arithmetic(name=self.curr_token)
-        elif self.curr_token in {"label", "if-goto", "goto"}:
-            cmd = self.curr_token
-            self.advance()
-            arg1 = self.curr_token
-            if cmd == "label":
-                return Label(name=arg1)
-            elif cmd == "goto":
-                return Goto(label=arg1)
-            elif cmd == "if-goto":
-                return IFGoto(label=arg1)
-        elif self.curr_token in {"push", "pop", "function", "call"}:
-            cmd = self.curr_token
-            self.advance()
-            arg1 = self.curr_token
-            self.advance()
-            arg2 = int(self.curr_token)
-            if cmd == "push":
-                return Push(segment=arg1, index=arg2)
-            elif cmd == "pop":
-                return Pop(segment=arg1, index=arg2)
-            elif cmd == "function":
-                return Function(name=arg1, vars=arg2)
-            elif cmd == "call":
-                return CallFunction(func_name=arg1, args=arg2)
-        return UndefinedCommand()
+    def command_type(self):
+        if not self.current_command:
+            return None
+        if self.current_command.startswith("push"):
+            return "C_PUSH"
+        elif self.current_command.startswith("pop"):
+            return "C_POP"
+        elif self.current_command.startswith("label"):
+            return "C_LABEL"
+        elif self.current_command.startswith("goto"):
+            return "C_GOTO"
+        elif self.current_command.startswith("if-goto"):
+            return "C_IF"
+        elif self.current_command.startswith("function"):
+            return "C_FUNCTION"
+        elif self.current_command.startswith("call"):
+            return "C_CALL"
+        elif self.current_command.startswith("return"):
+            return "C_RETURN"
+        else:
+            return "C_ARITHMETIC"
 
+    def arg1(self):
+        if self.command_type() == "C_RETURN":
+            raise ValueError("arg1() called on C_RETURN command")
+        if self.command_type() == "C_ARITHMETIC":
+            return self.current_command
+        return self.current_command.split(" ")[1]
+
+    def arg2(self):
+        if self.command_type() not in ["C_PUSH", "C_POP", "C_FUNCTION", "C_CALL"]:
+            raise ValueError("arg2() called on invalid command type")
+        return int(self.current_command.split(" ")[2])
+
+    def close(self):
+        self.reader.close()
+    
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
